@@ -5,6 +5,7 @@ import shutil
 import pwd
 import grp
 import subprocess
+import json
 
 from local_config import sites
 
@@ -16,8 +17,14 @@ class LocalStart:
 		pass
 
 	def move_update_artifacts(self):
-		shutil.copy('/build/scripts/specfile.json', '/build/artifacts/specfile_updated.json')
-		# Add container definition image
+		file_path = '/build/scripts/specfile.json'
+		with open(file_path, 'r') as raw_file:
+			specs = json.load(raw_file)
+			specs['resources']['compute:ecs']['task']['container_definition'] = {
+				'image': 'nu-wp-site:latest'
+			}
+		with open('/build/artifacts/specfile_updated.json', 'w') as out_file:
+			json.dump(specs, out_file)
 
 	def add_apache_site_configs(self):
 		for site in sites:
@@ -53,7 +60,10 @@ class LocalStart:
 	def edit_wp_config(self):
 		with open('/var/www/html/wp-config.php') as wp_conf_file:
 			lines = wp_conf_file.readlines()
-			db_name = lines.index("define('DB_NAME', getenv('WORDPRESS_DB_NAME'));\r\n")
+			try:
+				db_name = lines.index("define('DB_NAME', getenv('WORDPRESS_DB_NAME'));\r\n")
+			except ValueError:
+				return
 			lines[db_name] = "if ( isset( $_SERVER['DB_NAME'] ) ) {\r\n" \
 							 "\tdefine('DB_NAME', $_SERVER['DB_NAME']);\r\n} else {\r\n" \
 							 "\tdefine('DB_NAME', getenv('WORDPRESS_DB_NAME'));\r\n}\r\n"
@@ -76,12 +86,18 @@ class LocalStart:
 			""".format(wp_path, wp_path, site['local_url'], site['name'])
 			subprocess.check_output(command, shell=True)
 
+	def add_phpinfo(self):
+		with open('/var/www/html/info.php', 'w') as info_file:
+			info_file.write('<?php\nphpinfo();\n')
+
 	def cleanup(self):
-		os.remove('/var/www/html/scripts/local_config.py')
+		# os.remove('/build/scripts/local_config.py')
+		pass
 
 	def run(self):
 		self.move_update_artifacts()
 		self.add_apache_site_configs()
 		self.edit_wp_config()
 		self.wp_initial_setup()
+		self.add_phpinfo()
 		self.cleanup()

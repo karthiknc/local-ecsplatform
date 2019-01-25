@@ -67,7 +67,7 @@ def backup_file(file_abs_path):
 	backup_files[file_abs_path] = backup_file_path
 
 
-backup_file(os.path.abspath('dockerfiles/03_site/Dockerfile'))
+# backup_file(os.path.abspath('dockerfiles/03_site/Dockerfile'))
 
 
 def prepare_site_dockerfile():
@@ -84,6 +84,7 @@ def prepare_site_dockerfile():
 		lines = [i for j, i in enumerate(lines) if j not in removable_lines]
 		build_index = lines.index('    build_site @SITE_REPO@ @THEME@ @SITE_PATH@ @URL@ @ADMIN_PASS@ && \\\n')
 		lines[build_index] = '    build_site local-wp twentynineteen / localhost wp-admin && \\\n'
+		lines.insert(len(lines), 'RUN apt-get install vim -y\n')
 		start_file.seek(0)
 		start_file.writelines(lines)
 		start_file.truncate()
