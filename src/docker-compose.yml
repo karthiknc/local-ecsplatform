@@ -1,0 +1,48 @@
+version: '3'
+services:
+    db:
+        container_name: mysql
+        image: mysql:latest
+        volumes:
+            - db_data:/var/lib/mysql
+        command: --default-authentication-plugin=mysql_native_password
+        restart: always
+        environment:
+            MYSQL_ROOT_PASSWORD: wp_site
+
+    adminer:
+        depends_on:
+            - db
+        container_name: adminer
+        image: adminer:latest
+        restart: always
+        ports:
+          - 8080:8080
+
+    site:
+        depends_on:
+            - db
+        container_name: wp-site
+        image: nu-wp-site:latest
+        volumes:
+            - ./src/scripts:/var/www/html/scripts
+            - ./src/twentynineteen:/var/www/html/wp-content/themes/twentynineteen
+        restart: always
+        ports:
+            - 80:80
+        environment:
+            WORDPRESS_DB_NAME: wp_site
+            WORDPRESS_DB_USER: root
+            WORDPRESS_DB_PASSWORD: wp_site
+            WORDPRESS_DB_HOST: db:3306
+
+    proxy:
+        container_name: elb
+        image: newstechnology/ssl-proxy:latest
+        ports:
+            - 443:443
+        environment:
+            DOMAIN: localhost
+            TARGET_HOST: site
+volumes:
+    db_data:
