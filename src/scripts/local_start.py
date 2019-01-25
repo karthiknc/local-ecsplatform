@@ -20,6 +20,7 @@ class LocalStart:
 		file_path = '/build/scripts/specfile.json'
 		with open(file_path, 'r') as raw_file:
 			specs = json.load(raw_file)
+			specs['environment'] = 'local'
 			specs['resources']['compute:ecs']['task']['container_definition'] = {
 				'image': 'nu-wp-site:latest'
 			}
