@@ -5,5 +5,8 @@ __pycache__/
 .idea
 
 /ignore
+/src/themes
+
 /dockerfiles
 /docker-compose.yml
+/local_config.py
