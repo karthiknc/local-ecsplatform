@@ -82,8 +82,8 @@ def prepare_site_dockerfile():
 			elif 'rm -rf @SITE_REPO@' in line:
 				removable_lines.append(index)
 		lines = [i for j, i in enumerate(lines) if j not in removable_lines]
-		build_index = lines.index('    build_site @SITE_REPO@ @THEME@ @SITE_PATH@ @URL@ @ADMIN_PASS@\n')
-		lines[build_index] = '    build_site local-wp twentynineteen / localhost wp-admin\n'
+		build_index = lines.index('    build_site @SITE_REPO@ @THEME@ @SITE_PATH@ @URL@ @ADMIN_PASS@ && \\\n')
+		lines[build_index] = '    build_site local-wp twentynineteen / localhost wp-admin && \\\n'
 		start_file.seek(0)
 		start_file.writelines(lines)
 		start_file.truncate()
@@ -97,7 +97,7 @@ with open('dockerfiles/03_site/scripts/run_startup.py', 'r+') as start_file:
 	start_index = lines.index('from environment import Environment\n')
 	lines.insert(start_index + 1, '\nfrom local_start import LocalStart\n')
 	run_index = lines.index('def run():\n')
-	lines.insert(start_index + 1, '\n    LocalStart.run()\n')
+	lines.insert(run_index + 1, '\n    LocalStart().run()\n')
 	start_file.seek(0)
 	start_file.writelines(lines)
 	start_file.truncate()
@@ -121,15 +121,15 @@ with open('docker-compose.yml', 'r+') as compose_file:
 # Build docker images.
 if sys.argv[1] == 'true' or sys.argv[1] == '1':
 	print 'Building ECSP Image'
-	subprocess.call(['docker', 'build', './01_ecsp/', '--tag', 'nu-ecs-platform:latest'])
+	subprocess.call(['docker', 'build', './dockerfiles/01_ecsp/', '--tag', 'nu-ecs-platform:latest'])
 
 if sys.argv[2] == 'true' or sys.argv[2] == '1':
 	print 'Building WPP Image'
-	subprocess.call(['docker', 'build', './02_wpp/', '--tag', 'nu-wp-platform:latest'])
+	subprocess.call(['docker', 'build', './dockerfiles/02_wpp/', '--tag', 'nu-wp-platform:latest'])
 
 if sys.argv[3] == 'true' or sys.argv[3] == '1':
 	print 'Building Site Image'
-	subprocess.call(['docker', 'build', './03_site/', '--tag', 'nu-wp-site:latest'])
+	subprocess.call(['docker', 'build', './dockerfiles/03_site/', '--tag', 'nu-wp-site:latest'])
 
 # Revert backup files.
 for file_path, backup_path in backup_files.items():

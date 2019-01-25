@@ -25,7 +25,6 @@ services:
         container_name: wp-site
         image: nu-wp-site:latest
         volumes:
-            - ./src/scripts:/var/www/html/scripts
             - ./src/basic-theme:/var/www/html/wp-content/themes/basic-theme
         restart: always
         ports:
