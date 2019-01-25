@@ -11,58 +11,77 @@ from local_config import sites
 uid = pwd.getpwnam('www-data').pw_uid
 gid = grp.getgrnam('www-data').gr_gid
 
-for site in sites:
-	conf_path = '/etc/apache2/sites-available/{}.conf'.format(site['name'])
-	shutil.copy('/etc/apache2/sites-available/000-default.conf', conf_path)
+class LocalStart:
+	def __init__(self):
+		pass
 
-	with open(conf_path) as conf_file:
-		lines = conf_file.readlines()
-		server_name = lines.index('\t#ServerName www.example.com\n')
-		lines[server_name] = '\tServerName {}\n'.format(site['local_url'])
-		lines.insert(server_name + 1, '\tSetEnv DB_NAME {}\n'.format(site['db_name']))
+	def move_update_artifacts(self):
+		shutil.copy('/build/scripts/specfile.json', '/build/artifacts/specfile_updated.json')
+		# Add container definition image
 
-		log_dir = '/var/log/apache2/{}'.format(site['name'])
-		try:
-			os.makedirs(log_dir)
-			os.chown(log_dir, uid, gid)
-		except OSError:
-			print 'Log dir exists'
+	def add_apache_site_configs(self):
+		for site in sites:
+			conf_path = '/etc/apache2/sites-available/{}.conf'.format(site['name'])
+			shutil.copy('/etc/apache2/sites-available/000-default.conf', conf_path)
 
-		error_log = lines.index('\tErrorLog /var/log/apache2/error.log\n')
-		lines[error_log] = '\tErrorLog {}/error.log\n'.format(log_dir)
+			with open(conf_path) as conf_file:
+				lines = conf_file.readlines()
+				server_name = lines.index('\t#ServerName www.example.com\n')
+				lines[server_name] = '\tServerName {}\n'.format(site['local_url'])
+				lines.insert(server_name + 1, '\tSetEnv DB_NAME {}\n'.format(site['db_name']))
 
-		access_log = lines.index('\tCustomLog /var/log/apache2/access.log combined\n')
-		lines[access_log] = '\tCustomLog {}/access.log combined\n'.format(log_dir)
+				log_dir = '/var/log/apache2/{}'.format(site['name'])
+				try:
+					os.makedirs(log_dir)
+					os.chown(log_dir, uid, gid)
+				except OSError:
+					print 'Log dir exists'
 
-	with open(conf_path, 'w') as new_file:
-		new_file.writelines(lines)
+				error_log = lines.index('\tErrorLog /var/log/apache2/error.log\n')
+				lines[error_log] = '\tErrorLog {}/error.log\n'.format(log_dir)
 
-	subprocess.call(['a2ensite', site['name']])
+				access_log = lines.index('\tCustomLog /var/log/apache2/access.log combined\n')
+				lines[access_log] = '\tCustomLog {}/access.log combined\n'.format(log_dir)
 
-subprocess.call(['apachectl', '-k', 'restart'])
+			with open(conf_path, 'w') as new_file:
+				new_file.writelines(lines)
 
-for site in sites:
-	# Todo: This is installing on localhost DB
-	wp_path = '/var/www/html/'
-	command = """
-	if ! $(wp core is-installed --path={} --allow-root);
-	then
-		echo "Wordpress is not installed yet"
-		wp core install --path={} --url={} --title={} --admin_user=root --admin_password=root \
-		--admin_email=wordpress-platform@news.co.uk --allow-root
-	else
-		echo "Wordpress is already installed"
-	fi
-	""".format(wp_path, wp_path, site['local_url'], site['name'])
-	subprocess.check_output(command, shell=True)
+			subprocess.call(['a2ensite', site['name']])
 
-with open('/var/www/html/wp-config.php') as wp_conf_file:
-	lines = wp_conf_file.readlines()
-	db_name = lines.index("define('DB_NAME', getenv('WORDPRESS_DB_NAME'));\r\n")
-	lines[db_name] = "if ( isset( $_SERVER['DB_NAME'] ) ) {\r\n" \
-		"\tdefine('DB_NAME', $_SERVER['DB_NAME']);\r\n} else {\r\n" \
-		"\tdefine('DB_NAME', getenv('WORDPRESS_DB_NAME'));\r\n}\r\n"
-with open('/var/www/html/wp-config.php', 'w') as new_file:
-	new_file.writelines(lines)
+		subprocess.call(['apachectl', '-k', 'restart'])
 
-os.remove('/var/www/html/scripts/local_config.py')
+	def edit_wp_config(self):
+		with open('/var/www/html/wp-config.php') as wp_conf_file:
+			lines = wp_conf_file.readlines()
+			db_name = lines.index("define('DB_NAME', getenv('WORDPRESS_DB_NAME'));\r\n")
+			lines[db_name] = "if ( isset( $_SERVER['DB_NAME'] ) ) {\r\n" \
+							 "\tdefine('DB_NAME', $_SERVER['DB_NAME']);\r\n} else {\r\n" \
+							 "\tdefine('DB_NAME', getenv('WORDPRESS_DB_NAME'));\r\n}\r\n"
+		with open('/var/www/html/wp-config.php', 'w') as new_file:
+			new_file.writelines(lines)
+
+	def wp_initial_setup(self):
+		for site in sites:
+			# Todo: This is installing on localhost DB
+			wp_path = '/var/www/html/'
+			command = """
+			if ! $(wp core is-installed --path={} --allow-root);
+			then
+				echo "Wordpress is not installed yet"
+				wp core install --path={} --url={} --title={} --admin_user=root --admin_password=root \
+				--admin_email=wordpress-platform@news.co.uk --allow-root
+			else
+				echo "Wordpress is already installed"
+			fi
+			""".format(wp_path, wp_path, site['local_url'], site['name'])
+			subprocess.check_output(command, shell=True)
+
+	def cleanup(self):
+		os.remove('/var/www/html/scripts/local_config.py')
+
+	def run(self):
+		self.move_update_artifacts()
+		self.add_apache_site_configs()
+		self.edit_wp_config()
+		self.wp_initial_setup()
+		self.cleanup()

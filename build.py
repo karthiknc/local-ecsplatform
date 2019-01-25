@@ -5,7 +5,7 @@ import sys
 import shutil
 import subprocess
 
-from local_config import sites
+from local_config import sites, github
 
 # Platform build automator.
 #
@@ -24,31 +24,37 @@ if len(sys.argv) < 4:
 	print '\texample 1: ./build.py 0 0 1'
 	exit(1)
 
-# Creating symlinks required for Docker Volume.
-# for site in sites:
-# 	print "Adding {} symlink to Docker volumes".format(site['path'])
-# 	theme_path = os.path.abspath('{}/src/themes/{}'.format(site['path'], site['theme']))
-# 	docker_volume_path = os.path.abspath('./themes/{}'.format(site['theme']))
-# 	if not os.path.isdir(docker_volume_path):
-# 		os.makedirs('themes')
-# 	try:
-# 		os.symlink(theme_path, docker_volume_path)
-# 	except OSError:
-# 		print '\tSymlink already exists'
 
-# Todo: download dockerfiles from github:
-# Todo: svn ls https://github.com/newsuk/nu-ecsplatform.git/trunk/ecsplatform/orchestrator/actors/build/dockerfiles
-# --username=user --password=pass
-subprocess.call(
-	['svn',
-	'export',
-	'https://github.com/newsuk/nu-ecsplatform.git/trunk/ecsplatform/orchestrator/actors/build/dockerfiles',
-	'--username=user',
-	'--password=pass',
-	'--non-interactive',
-	'--trust-server-cert'
-	]
-)
+if 'branch' not in github or github['branch'] == 'master':
+	branch = 'trunk'
+else:
+	branch = 'branches/{}'.format(github['branch'])
+
+shutil.rmtree(os.path.abspath('dockerfiles'))
+
+
+def svn_export(path):
+	subprocess.call(
+		['svn',
+		'export',
+		'https://github.com/newsuk/nu-ecsplatform.git/{}/{}'.format(branch, path),
+		'--username={}'.format(github['username']),
+		'--password={}'.format(github['access_token']),
+		'--non-interactive',
+		'--trust-server-cert'
+		]
+	)
+
+
+svn_export('ecsplatform/orchestrator/actors/build/dockerfiles')
+svn_export('ecsplatform/config/specfile.json')
+
+# Copy specfile.json to scripts
+shutil.move(os.path.abspath('specfile.json'), os.path.abspath('dockerfiles/03_site/scripts/specfile.json'))
+# Copy local_start script and local sites config file to scripts.
+shutil.copy(os.path.abspath('src/scripts/local_start.py'),
+			os.path.abspath('dockerfiles/03_site/scripts/local_start.py'))
+shutil.copy(os.path.abspath('local_config.py'), os.path.abspath('dockerfiles/03_site/scripts/local_config.py'))
 
 backup_files = {}
 
@@ -62,7 +68,6 @@ def backup_file(file_abs_path):
 
 
 backup_file(os.path.abspath('dockerfiles/03_site/Dockerfile'))
-backup_file(os.path.abspath('03_site/startup.sh'))
 
 
 def prepare_site_dockerfile():
@@ -87,16 +92,15 @@ prepare_site_dockerfile()
 
 
 # Add startup python script for local setup to startup script.
-with open('03_site/startup.sh', 'r+') as start_file:
+with open('dockerfiles/03_site/scripts/run_startup.py', 'r+') as start_file:
 	lines = start_file.readlines()
-	start_index = lines.index('#!/bin/bash\n')
-	lines.insert(start_index + 1, '\npython /var/www/html/scripts/local_start.py\n')
+	start_index = lines.index('from environment import Environment\n')
+	lines.insert(start_index + 1, '\nfrom local_start import LocalStart\n')
+	run_index = lines.index('def run():\n')
+	lines.insert(start_index + 1, '\n    LocalStart.run()\n')
 	start_file.seek(0)
 	start_file.writelines(lines)
 	start_file.truncate()
-
-# Copy sites config file required for local start script.
-shutil.copy(os.path.abspath('local_config.py'), os.path.abspath('src/scripts/local_config.py'))
 
 # Copy docker-compose.yml to root dir.
 # Todo: Be careful. This will override old docker-compose.yml
@@ -105,7 +109,7 @@ shutil.copy(os.path.abspath('src/docker-compose.yml'), os.path.abspath('docker-c
 # Add mount sites themes volume to docker compose.
 with open('docker-compose.yml', 'r+') as compose_file:
 	lines = compose_file.readlines()
-	vol_index = lines.index('            - ./src/scripts:/var/www/html/scripts\n')
+	vol_index = lines.index('            - ./src/basic-theme:/var/www/html/wp-content/themes/basic-theme\n')
 	for site in reversed(sites):
 		theme_path = '{}/src/themes/{}'.format(site['path'], site['theme'])
 		lines.insert(vol_index + 1, '            - {}:/var/www/html/wp-content/themes/{}\n'
