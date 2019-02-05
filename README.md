@@ -3,6 +3,7 @@ This repository helps you setup ECS platform and sites in your local machine.
 
 ## Setup
  - Install docker
+ - Run `xcode-select --install` if not installed yet!
  - Clone required site repositories to your local machine.
    - Eg: `~/projects/nu-tls-wp-cms`
  - Clone this repository to your local machine.

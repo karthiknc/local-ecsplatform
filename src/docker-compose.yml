@@ -1,7 +1,7 @@
 version: '3'
 services:
     db:
-        container_name: mysql
+        container_name: wp-mysql
         image: mysql:latest
         volumes:
             - db_data:/var/lib/mysql
@@ -13,11 +13,11 @@ services:
     adminer:
         depends_on:
             - db
-        container_name: adminer
+        container_name: wp-adminer
         image: adminer:latest
         restart: always
         ports:
-          - 8080:8080
+          - 8090:8080
 
     site:
         depends_on:
@@ -25,7 +25,7 @@ services:
         container_name: wp-site
         image: nu-wp-site:latest
         volumes:
-            - ./src/basic-theme:/var/www/html/wp-content/themes/basic-theme
+            - ./wp:/var/www/html
         restart: always
         ports:
             - 80:80

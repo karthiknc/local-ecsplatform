@@ -84,7 +84,9 @@ def prepare_site_dockerfile():
 		lines = [i for j, i in enumerate(lines) if j not in removable_lines]
 		build_index = lines.index('    build_site @SITE_REPO@ @THEME@ @SITE_PATH@ @URL@ @ADMIN_PASS@ && \\\n')
 		lines[build_index] = '    build_site local-wp twentynineteen / localhost wp-admin && \\\n'
-		lines.insert(len(lines), 'RUN apt-get install vim -y\n')
+		lines.insert(len(lines), 'RUN apt-get install vim -y && mkdir -p /var/www/html-copy && '
+								 'mv /var/www/html/* /var/www/html-copy\n')
+		lines.insert(len(lines), 'CMD mv -n /var/www/html-copy/* /var/www/html && sh -c /usr/bin/supervisord\n')
 		start_file.seek(0)
 		start_file.writelines(lines)
 		start_file.truncate()
@@ -103,21 +105,27 @@ with open('dockerfiles/03_site/scripts/run_startup.py', 'r+') as start_file:
 	start_file.writelines(lines)
 	start_file.truncate()
 
+
+try:
+	os.makedirs('wp')
+except OSError:
+	print 'wp dir exists'
+
 # Copy docker-compose.yml to root dir.
 # Todo: Be careful. This will override old docker-compose.yml
 shutil.copy(os.path.abspath('src/docker-compose.yml'), os.path.abspath('docker-compose.yml'))
 
 # Add mount sites themes volume to docker compose.
-with open('docker-compose.yml', 'r+') as compose_file:
-	lines = compose_file.readlines()
-	vol_index = lines.index('            - ./src/basic-theme:/var/www/html/wp-content/themes/basic-theme\n')
-	for site in reversed(sites):
-		theme_path = '{}/src/themes/{}'.format(site['path'], site['theme'])
-		lines.insert(vol_index + 1, '            - {}:/var/www/html/wp-content/themes/{}\n'
-															.format(theme_path, site['theme']))
-	compose_file.seek(0)
-	compose_file.writelines(lines)
-	compose_file.truncate()
+# with open('docker-compose.yml', 'r+') as compose_file:
+# 	lines = compose_file.readlines()
+# 	vol_index = lines.index('            - ./src/basic-theme:/var/www/html/wp-content/themes/basic-theme\n')
+# 	for site in reversed(sites):
+# 		theme_path = '{}/src/themes/{}'.format(site['path'], site['theme'])
+# 		lines.insert(vol_index + 1, '            - {}:/var/www/html/wp-content/themes/{}\n'
+# 															.format(theme_path, site['theme']))
+# 	compose_file.seek(0)
+# 	compose_file.writelines(lines)
+# 	compose_file.truncate()
 
 # Build docker images.
 if sys.argv[1] == 'true' or sys.argv[1] == '1':
