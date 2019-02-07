@@ -54,6 +54,8 @@ shutil.move(os.path.abspath('specfile.json'), os.path.abspath('dockerfiles/03_si
 # Copy local_start script and local sites config file to scripts.
 shutil.copy(os.path.abspath('src/scripts/local_start.py'),
 			os.path.abspath('dockerfiles/03_site/scripts/local_start.py'))
+shutil.copy(os.path.abspath('src/scripts/local_entrypoint.py'),
+			os.path.abspath('dockerfiles/03_site/scripts/local_entrypoint.py'))
 shutil.copy(os.path.abspath('local_config.py'), os.path.abspath('dockerfiles/03_site/scripts/local_config.py'))
 
 backup_files = {}
@@ -86,7 +88,7 @@ def prepare_site_dockerfile():
 		lines[build_index] = '    build_site local-wp twentynineteen / localhost wp-admin && \\\n'
 		lines.insert(len(lines), 'RUN apt-get install vim -y && mkdir -p /var/www/html-copy && '
 								 'mv /var/www/html/* /var/www/html-copy\n')
-		lines.insert(len(lines), 'CMD mv -n /var/www/html-copy/* /var/www/html && sh -c /usr/bin/supervisord\n')
+		lines.insert(len(lines), 'CMD python /build/scripts/local_entrypoint.py && /bin/sh -c /usr/bin/supervisord\n')
 		start_file.seek(0)
 		start_file.writelines(lines)
 		start_file.truncate()
