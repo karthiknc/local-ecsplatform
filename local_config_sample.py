@@ -8,7 +8,7 @@ sites = [
 	{
 		'name': 'intranet',
 		'path': '../nu-intranet',
-		'theme': 'intranet',
+		'theme': 'src/themes/intranet',
 		'local_url': 'intranet.com',
 		'db_name': 'intranet'
 	}
