@@ -9,5 +9,6 @@ __pycache__/
 
 /wp
 /dockerfiles
+/specfile.json
 /docker-compose.yml
 /local_config.py

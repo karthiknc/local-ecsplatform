@@ -34,6 +34,7 @@ class Build:
 		parser.add_argument('-v', '--version', action='store_true', help='Current version')
 		parser.add_argument('-vv', '--verbose', action='store_true', help='Output more info about build')
 		parser.add_argument('-sk', '--skip_download', action='store_true', help='Skip Download dockerfiles')
+		parser.add_argument('-od', '--only_download', action='store_true', help='Only Download dockerfiles')
 		self.args = parser.parse_args()
 
 	def vprint(self, message):
@@ -143,6 +144,12 @@ class Build:
 		except OSError:
 			self.vprint('dockerfiles directory does not exists')
 
+		self.vprint('Deleting specfile.json')
+		try:
+			os.remove(os.path.abspath('specfile.json'))
+		except OSError:
+			self.vprint('specfile.json does not exists')
+
 		self.svn_export('ecsplatform/orchestrator/actors/build/dockerfiles')
 		self.svn_export('ecsplatform/config/specfile.json')
 
@@ -239,7 +246,8 @@ class Build:
 			lines[build_index] = '    build_site local-wp basic-theme / localhost wp-admin && \\\n'
 
 			self.vprint('Adding line with `install vim && mv html to html-copy`')
-			lines.insert(len(lines), 'RUN apt-get install vim -y && mkdir -p /var/www/html-copy && '
+			lines.insert(len(lines), 'RUN apt-get update && apt-get install -y --no-install-recommends '
+									 'php7.3-xdebug vim nano -y && mkdir -p /var/www/html-copy && '
 									 'mv /var/www/html/* /var/www/html-copy\n')
 
 			self.vprint('Adding line with `CMD local_entrypoint.py && supervisord`')
@@ -314,6 +322,7 @@ class Build:
 		if self.args.skip_download and os.path.isdir('dockerfiles'):
 			self.vprint('Skipping download dockerfiles')
 		else:
+			print 'Downloading dockerfiles'
 			self.download_dockerfiles()
 			self.backup_file('dockerfiles/03_site/Dockerfile')
 			self.backup_file('dockerfiles/03_site/scripts/run_startup.py')
@@ -347,6 +356,12 @@ class Build:
 		if self.args.symlink and not self.build:
 			self.create_symlinks()
 			self.build_docker_compose()
+
+		if self.args.only_download:
+			print 'Downloading dockerfiles'
+			self.download_dockerfiles()
+			self.backup_file('dockerfiles/03_site/Dockerfile')
+			self.backup_file('dockerfiles/03_site/scripts/run_startup.py')
 
 		if self.build:
 			self.build_images()
