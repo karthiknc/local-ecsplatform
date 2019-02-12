@@ -47,6 +47,17 @@ class Build:
 		if self.args.verbose:
 			print message
 
+	def install_docker_sync(self):
+		"""
+		Install docker-sync -> http://docker-sync.io/ Requires sudo.
+
+		:return: None
+		"""
+		try:
+			subprocess.call(['docker-sync-stack', '--version'])
+		except OSError:
+			subprocess.call(['gem', 'install', 'docker-sync'])
+
 	def build_docker_compose(self):
 		"""
 		Build Docker Compose file.
@@ -56,35 +67,59 @@ class Build:
 
 		:return: None
 		"""
-		print 'Building docker-compose.yml'
+		print 'Building docker-compose.yml and docker-sync.yml'
 
 		self.vprint('Copying `src/docker-compose.yml` to `docker-compose.yml`')
-
-		# Todo: Be careful. This will override old docker-compose.yml
+		# Todo: Be careful. This will override old docker-compose.yml and docker-sync.yml
 		shutil.copy(os.path.abspath('src/docker-compose.yml'), os.path.abspath('docker-compose.yml'))
 
-		# Add mount sites themes volume to docker compose.
-		self.vprint('Opening docker-compose.yml for editing')
+		self.vprint('Copying `src/docker-sync.yml` to `docker-sync.yml`')
+		shutil.copy(os.path.abspath('src/docker-sync.yml'), os.path.abspath('docker-sync.yml'))
 
-		with open('docker-compose.yml', 'r+') as compose_file:
-			lines = compose_file.readlines()
-			vol_index = lines.index('            - ./wp:/var/www/html\n')
+		# Add mount sites themes volume to docker compose.
+		self.vprint('Opening docker-compose.yml and docker-sync.yml for editing')
+
+		with open('docker-compose.yml', 'r+') as compose_file, open('docker-sync.yml', 'r+') as sync_file:
+			compose_lines = compose_file.readlines()
+			sync_lines = sync_file.readlines()
+
+			vol_index = compose_lines.index('            - site-sync:/var/www/html:nocopy\n')
+			sync_src_index = sync_lines.index('        src: ./wp\n')
+
 			for site in reversed(sites):
+				volume_name = 'theme-{}-sync'.format(site['theme'].split('/')[-1])
 				theme_path = '{}/{}'.format(site['path'], site['theme'])
 
 				self.vprint('Adding {} under site volumes'.format(theme_path))
+				compose_lines.insert(vol_index + 1, '            - {}:{}:nocopy\n'
+								.format(volume_name, os.path.abspath(theme_path)))
 
-				lines.insert(vol_index + 1, '            - {}:{}\n'
-								.format(theme_path, os.path.abspath(theme_path)))
+				self.vprint('Adding volume definitions for {}'.format(volume_name))
+				vol_def_index = compose_lines.index('    site-sync:\n')
+				compose_lines.insert(vol_def_index + 2, '    {}:\n'.format(volume_name))
+				compose_lines.insert(vol_def_index + 3, '        external: true\n')
 
-			self.vprint('Moving file pointer to 0')
+				self.vprint('Adding sync definitions for {}'.format(volume_name))
+				sync_lines.insert(sync_src_index + 1, '    {}:\n'.format(volume_name))
+				sync_lines.insert(sync_src_index + 2, '        src: {}\n'.format(theme_path))
+
+			self.vprint('Moving docker-compose file pointer to 0')
 			compose_file.seek(0)
 
-			self.vprint('Writing lines')
-			compose_file.writelines(lines)
+			self.vprint('Writing compose_lines')
+			compose_file.writelines(compose_lines)
 
 			self.vprint('Truncating old lines and closing')
 			compose_file.truncate()
+
+			self.vprint('Moving docker-sync file pointer to 0')
+			sync_file.seek(0)
+
+			self.vprint('Writing sync_lines')
+			sync_file.writelines(sync_lines)
+
+			self.vprint('Truncating old lines and closing')
+			sync_file.truncate()
 
 	def create_symlinks(self):
 		"""
@@ -318,6 +353,8 @@ class Build:
 		:return: None
 		"""
 		print 'Building docker images'
+
+		self.install_docker_sync()
 
 		if self.args.skip_download and os.path.isdir('dockerfiles'):
 			self.vprint('Skipping download dockerfiles')

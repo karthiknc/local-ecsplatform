@@ -1,0 +1,8 @@
+version: '2'
+
+options:
+    verbose: false
+syncs:
+    site-sync:
+        sync_excludes: ['.idea']
+        src: ./wp

@@ -25,7 +25,7 @@ services:
         container_name: wp-site
         image: nu-wp-site:latest
         volumes:
-            - ./wp:/var/www/html
+            - site-sync:/var/www/html:nocopy
         restart: always
         ports:
             - 80:80
@@ -43,5 +43,8 @@ services:
         environment:
             DOMAIN: localhost
             TARGET_HOST: site
+
 volumes:
     db_data:
+    site-sync:
+        external: true
