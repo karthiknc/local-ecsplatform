@@ -4,10 +4,14 @@ parts=''
 
 for line in $(docker ps -a | grep $1);
 do
-   parts=($line)
-   break
+	parts=($line)
+	break
 done
 
 echo Attaching to ${parts[0]}
 
-docker exec -it ${parts[0]} /bin/bash
+if [ $1 = 'wp-site' ]; then
+    docker exec -it ${parts[0]} /bin/bash
+else
+    docker exec -it ${parts[0]} /bin/sh
+fi

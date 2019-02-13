@@ -9,6 +9,7 @@ __pycache__/
 /src/themes
 
 /wp
+/volumes
 /dockerfiles
 /specfile.json
 /docker-compose.yml

@@ -4,6 +4,8 @@ import argparse
 import os
 import shutil
 import subprocess
+import socket
+import filecmp
 
 from local_config import sites, github
 
@@ -35,6 +37,7 @@ class Build:
 		parser.add_argument('-vv', '--verbose', action='store_true', help='Output more info about build')
 		parser.add_argument('-sk', '--skip_download', action='store_true', help='Skip Download dockerfiles')
 		parser.add_argument('-od', '--only_download', action='store_true', help='Only Download dockerfiles')
+		parser.add_argument('-p', '--prepare_ssl', action='store_true', help='Prepare proxy ssl service')
 		self.args = parser.parse_args()
 
 	def vprint(self, message):
@@ -53,9 +56,12 @@ class Build:
 
 		:return: None
 		"""
+		print 'Installing docker-sync'
 		try:
+			self.vprint('Checking if docker-sync exists')
 			subprocess.call(['docker-sync-stack', '--version'])
 		except OSError:
+			self.vprint('Running gem install docker-sync')
 			subprocess.call(['gem', 'install', 'docker-sync'])
 
 	def build_docker_compose(self):
@@ -140,6 +146,76 @@ class Build:
 				os.symlink(os.path.abspath(src_path), os.path.abspath(dst_path))
 			except OSError:
 				print '{} Symlink already exists.'.format(dst_path)
+
+	def prepare_ssl_proxy(self):
+		"""
+		Prepare v3.ext file for ssl certificate, (re)starts proxy service.
+
+		:return: None
+		"""
+		print 'Preparing ssl proxy'
+		self.vprint('Creating directories: volumes/certificates')
+		subprocess.call(['mkdir', '-p', 'volumes/certificates'])
+
+		if os.path.isfile('volumes/certificates/v3.ext'):
+			self.vprint('Creating backup: volumes/certificates/v3.ext.bak')
+			shutil.copy(os.path.abspath('volumes/certificates/v3.ext'),
+						os.path.abspath('volumes/certificates/v3.ext.bak'))
+
+		self.vprint('Copying src/ssl/v3.ext to volumes/certificates/v3.ext')
+		shutil.copy(os.path.abspath('src/ssl/v3.ext'), os.path.abspath('volumes/certificates/v3.ext'))
+
+		with open('volumes/certificates/v3.ext', 'r+') as ssl_file:
+			lines = ssl_file.readlines()
+			dns_index = lines.index('DNS.2 = *.local\n')
+
+			i = len(sites) + 2
+			for site in reversed(sites):
+				self.vprint('Adding DNS entry for {}'.format(site['local_url']))
+				lines.insert(dns_index + 1, 'DNS.{} = {}\n'.format(i, site['local_url']))
+				i -= 1
+
+			self.vprint('Moving file pointer to 0')
+			ssl_file.seek(0)
+
+			self.vprint('Writing lines')
+			ssl_file.writelines(lines)
+
+			self.vprint('Truncating old lines and closing')
+			ssl_file.truncate()
+
+		self.vprint('Comparing volumes/certificates/v3.ext and backup')
+		identical = filecmp.cmp(os.path.abspath('volumes/certificates/v3.ext'),
+					os.path.abspath('volumes/certificates/v3.ext.bak'))
+
+		self.vprint('Deleting volumes/certificates/v3.ext.bak')
+		os.remove('volumes/certificates/v3.ext.bak')
+
+		if identical:
+			self.vprint('volumes/certificates/v3.ext and backup are identical.')
+			print 'SSL Proxy container is upto date.'
+			return
+
+		try:
+			self.vprint('Deleting mounted certificate files')
+			os.remove('volumes/certificates/key.pem')
+			os.remove('volumes/certificates/csr.pem')
+			os.remove('volumes/certificates/cert.pem')
+		except OSError:
+			self.vprint('No certificate files to delete.')
+
+		try:
+			self.vprint('Attempting to restart proxy with `docker-compose restart proxy`')
+			subprocess.check_call(['docker-compose', 'restart', 'proxy'])
+		except subprocess.CalledProcessError:
+			self.vprint('`docker-compose restart proxy` failed.')
+			self.vprint('Running `docker-compose up -d proxy`')
+			subprocess.call(['docker-compose', 'up', '-d', 'proxy'])
+		except OSError:
+			pass  # docker-compose not found
+
+		self.vprint('Attempting to trust ecslocal certificate. Requires administrator privilege.')
+		subprocess.call(['sudo', './src/ssl/cert.sh', 'true'])
 
 	def svn_export(self, path):
 		"""
@@ -257,6 +333,9 @@ class Build:
 		print 'Preparing site dockerfile'
 		self.vprint('Opening dockerfiles/03_site/Dockerfile')
 
+		hostname = socket.gethostname()
+		host_ip = socket.gethostbyname(hostname)
+
 		with open('dockerfiles/03_site/Dockerfile', 'r+') as start_file:
 			removable_lines = []
 			lines = start_file.readlines()
@@ -280,10 +359,24 @@ class Build:
 			build_index = lines.index('    build_site @SITE_REPO@ @THEME@ @SITE_PATH@ @URL@ @ADMIN_PASS@ && \\\n')
 			lines[build_index] = '    build_site local-wp basic-theme / localhost wp-admin && \\\n'
 
-			self.vprint('Adding line with `install vim && mv html to html-copy`')
+			self.vprint('Adding line with `install vim xdebug && mv html to html-copy`')
 			lines.insert(len(lines), 'RUN apt-get update && apt-get install -y --no-install-recommends '
-									 'php7.3-xdebug vim nano -y && mkdir -p /var/www/html-copy && '
-									 'mv /var/www/html/* /var/www/html-copy\n')
+									 'php7.3-xdebug vim nano -y && phpenmod xdebug && mkdir -p /var/www/html-copy && '
+									 'mv /var/www/html/* /var/www/html-copy && \\\n')
+			lines.insert(len(lines), '    echo "zend_extension=$(find /usr/lib/php/2018* -name xdebug.so)"'
+									 ' > /etc/php/7.3/mods-available/xdebug.ini && \\\n')
+			lines.insert(len(lines),
+						 '    echo "xdebug.default_enable = 0" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
+			lines.insert(len(lines),
+						 '    echo "xdebug.remote_enable = 1" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
+			lines.insert(len(lines),
+						 '    echo "xdebug.idekey = PHPSTORM" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
+			lines.insert(len(lines),
+						 '    echo "xdebug.remote_connect_back = 0" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
+			lines.insert(len(lines),
+						 '    echo "xdebug.remote_port = 9000" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
+			lines.insert(len(lines), '    echo "xdebug.remote_host = {}" >> '
+						 '/etc/php/7.3/mods-available/xdebug.ini\n'.format(host_ip))
 
 			self.vprint('Adding line with `CMD local_entrypoint.py && supervisord`')
 			lines.insert(len(lines),
@@ -371,6 +464,15 @@ class Build:
 		self.create_symlinks()
 		self.build_docker_compose()
 
+	def start_containers(self):
+		"""
+		Start docker-sync, Start services with docker-compose.
+
+		:return: None
+		"""
+		subprocess.call(['docker-sync', 'start'])
+		subprocess.call(['docker-compose', 'up', '-d'])
+
 	def run(self):
 		"""
 		Run builder.
@@ -399,6 +501,9 @@ class Build:
 			self.download_dockerfiles()
 			self.backup_file('dockerfiles/03_site/Dockerfile')
 			self.backup_file('dockerfiles/03_site/scripts/run_startup.py')
+
+		if self.args.prepare_ssl:
+			self.prepare_ssl_proxy()
 
 		if self.build:
 			self.build_images()

@@ -38,6 +38,8 @@ services:
     proxy:
         container_name: elb
         image: newstechnology/ssl-proxy:latest
+        volumes:
+            - ./volumes/certificates:/etc/nginx/certs
         ports:
             - 443:443
         environment:
