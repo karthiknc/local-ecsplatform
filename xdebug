@@ -8,10 +8,14 @@ done
 
 if [[ ($1 == 'enable') || ($1 == '--enable') || ($1 == '1') ]]; then
     echo Enabling xdebug on ${parts[0]}
-    docker exec ${parts[0]} '/usr/sbin/phpenmod xdebug && /usr/bin/supervisorctl restart apache'
+    docker exec ${parts[0]} /bin/sh -c "/usr/sbin/phpenmod xdebug && \
+        sed -i 's/^#//' /etc/php/7.3/mods-available/xdebug.ini && \
+        /usr/bin/supervisorctl restart apache"
 elif [[ ($1 == 'disable') || ($1 == '--disable') || ($1 == '0') ]]; then
     echo Disabling xdebug on ${parts[0]}
-    docker exec ${parts[0]} /bin/sh -c "/usr/sbin/phpdismod xdebug && /usr/bin/supervisorctl restart apache"
+    docker exec ${parts[0]} /bin/sh -c "/usr/sbin/phpdismod xdebug && \
+        sed -i '/^#/! s/^/#/' /etc/php/7.3/mods-available/xdebug.ini && \
+        /usr/bin/supervisorctl restart apache"
 else
     echo No option provided. Pass --enable or --disable.
 fi
