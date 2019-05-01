@@ -51,20 +51,6 @@ class Build:
 		if self.args.verbose:
 			print message
 
-	def install_docker_sync(self):
-		"""
-		Install docker-sync -> http://docker-sync.io/ Requires sudo.
-
-		:return: None
-		"""
-		print 'Installing docker-sync'
-		try:
-			self.vprint('Checking if docker-sync exists')
-			subprocess.call(['docker-sync-stack', '--version'])
-		except OSError:
-			self.vprint('Running gem install docker-sync')
-			subprocess.call(['gem', 'install', 'docker-sync'])
-
 	def build_docker_compose(self):
 		"""
 		Build Docker Compose file.
@@ -74,41 +60,25 @@ class Build:
 
 		:return: None
 		"""
-		print 'Building docker-compose.yml and docker-sync.yml'
+		print 'Building docker-compose.yml'
 
 		self.vprint('Copying `src/docker-compose.yml` to `docker-compose.yml`')
-		# Todo: Be careful. This will override old docker-compose.yml and docker-sync.yml
+		# Todo: Be careful. This will override old docker-compose.yml
 		shutil.copy(os.path.abspath('src/docker-compose.yml'), os.path.abspath('docker-compose.yml'))
 
-		self.vprint('Copying `src/docker-sync.yml` to `docker-sync.yml`')
-		shutil.copy(os.path.abspath('src/docker-sync.yml'), os.path.abspath('docker-sync.yml'))
-
 		# Add mount sites themes volume to docker compose.
-		self.vprint('Opening docker-compose.yml and docker-sync.yml for editing')
+		self.vprint('Opening docker-compose.yml for editing')
 
-		with open('docker-compose.yml', 'r+') as compose_file, open('docker-sync.yml', 'r+') as sync_file:
+		with open('docker-compose.yml', 'r+') as compose_file:
 			compose_lines = compose_file.readlines()
-			sync_lines = sync_file.readlines()
-
-			vol_index = compose_lines.index('            - site-sync:/var/www/html:nocopy\n')
-			sync_src_index = sync_lines.index('        src: ./wp\n')
+			vol_index = compose_lines.index('            - ./wp:/var/www/html:cached\n')
 
 			for site in reversed(sites):
-				volume_name = 'theme-{}-sync'.format(site['theme'].split('/')[-1])
 				theme_path = '{}/{}'.format(site['path'], site['theme'])
 
 				self.vprint('Adding {} under site volumes'.format(theme_path))
-				compose_lines.insert(vol_index + 1, '            - {}:{}:nocopy\n'
-								.format(volume_name, os.path.abspath(theme_path)))
-
-				self.vprint('Adding volume definitions for {}'.format(volume_name))
-				vol_def_index = compose_lines.index('    site-sync:\n')
-				compose_lines.insert(vol_def_index + 2, '    {}:\n'.format(volume_name))
-				compose_lines.insert(vol_def_index + 3, '        external: true\n')
-
-				self.vprint('Adding sync definitions for {}'.format(volume_name))
-				sync_lines.insert(sync_src_index + 1, '    {}:\n'.format(volume_name))
-				sync_lines.insert(sync_src_index + 2, '        src: {}\n'.format(theme_path))
+				compose_lines.insert(vol_index + 1, '            - {}:{}\n'
+								.format(theme_path, os.path.abspath(theme_path)))
 
 			self.vprint('Moving docker-compose file pointer to 0')
 			compose_file.seek(0)
@@ -118,15 +88,6 @@ class Build:
 
 			self.vprint('Truncating old lines and closing')
 			compose_file.truncate()
-
-			self.vprint('Moving docker-sync file pointer to 0')
-			sync_file.seek(0)
-
-			self.vprint('Writing sync_lines')
-			sync_file.writelines(sync_lines)
-
-			self.vprint('Truncating old lines and closing')
-			sync_file.truncate()
 
 	def create_symlinks(self):
 		"""
@@ -383,19 +344,19 @@ class Build:
 			lines.insert(len(lines), 'RUN apt-get update && apt-get install -y --no-install-recommends '
 									 'php7.3-xdebug vim nano -y && mkdir -p /var/www/html-copy && '
 									 'mv /var/www/html/* /var/www/html-copy && \\\n')
-			lines.insert(len(lines), '    echo "zend_extension=$(find /usr/lib/php/2018* -name xdebug.so)"'
+			lines.insert(len(lines), '    echo "#zend_extension=$(find /usr/lib/php/2018* -name xdebug.so)"'
 									 ' > /etc/php/7.3/mods-available/xdebug.ini && \\\n')
 			lines.insert(len(lines),
-						 '    echo "xdebug.default_enable = 0" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
+						 '    echo "#xdebug.default_enable = 0" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
 			lines.insert(len(lines),
-						 '    echo "xdebug.remote_enable = 1" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
+						 '    echo "#xdebug.remote_enable = 1" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
 			lines.insert(len(lines),
-						 '    echo "xdebug.idekey = PHPSTORM" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
+						 '    echo "#xdebug.idekey = PHPSTORM" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
 			lines.insert(len(lines),
-						 '    echo "xdebug.remote_connect_back = 0" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
+						 '    echo "#xdebug.remote_connect_back = 0" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
 			lines.insert(len(lines),
-						 '    echo "xdebug.remote_port = 9000" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
-			lines.insert(len(lines), '    echo "xdebug.remote_host = {}" >> '
+						 '    echo "#xdebug.remote_port = 9000" >> /etc/php/7.3/mods-available/xdebug.ini && \\\n')
+			lines.insert(len(lines), '    echo "#xdebug.remote_host = {}" >> '
 						 '/etc/php/7.3/mods-available/xdebug.ini\n'.format(host_ip))
 
 			self.vprint('Adding line with `CMD local_entrypoint.py && supervisord`')
@@ -467,8 +428,6 @@ class Build:
 		"""
 		print 'Building docker images'
 
-		self.install_docker_sync()
-
 		if self.args.skip_download and os.path.isdir('dockerfiles'):
 			self.vprint('Skipping download dockerfiles')
 		else:
@@ -486,11 +445,10 @@ class Build:
 
 	def start_containers(self):
 		"""
-		Start docker-sync, Start services with docker-compose.
+		Start services with docker-compose.
 
 		:return: None
 		"""
-		subprocess.call(['docker-sync', 'start'])
 		subprocess.call(['docker-compose', 'up', '-d'])
 
 	def run(self):

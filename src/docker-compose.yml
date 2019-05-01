@@ -25,7 +25,7 @@ services:
         container_name: wp-site
         image: nu-wp-site:latest
         volumes:
-            - site-sync:/var/www/html:nocopy
+            - ./wp:/var/www/html:cached
         restart: always
         ports:
             - 80:80
@@ -38,6 +38,7 @@ services:
     proxy:
         container_name: elb
         image: newstechnology/ssl-proxy:latest
+        restart: always
         volumes:
             - ./volumes/certificates:/etc/nginx/certs
         ports:
@@ -50,6 +51,7 @@ services:
         container_name: wp-cache
         hostname: redis
         image: redis:alpine
+        restart: always
 
     cache-ui:
         container_name: wp-cache-ui
@@ -63,5 +65,3 @@ services:
 
 volumes:
     db_data:
-    site-sync:
-        external: true

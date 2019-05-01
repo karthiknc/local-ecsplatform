@@ -3,7 +3,6 @@ __pycache__/
 *$py.class
 
 .idea
-.docker-sync
 
 /ignore
 /src/themes
@@ -13,5 +12,4 @@ __pycache__/
 /dockerfiles
 /specfile.json
 /docker-compose.yml
-/docker-sync.yml
 /local_config.py
