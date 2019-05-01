@@ -38,6 +38,7 @@ class Build:
 		parser.add_argument('-sk', '--skip_download', action='store_true', help='Skip Download dockerfiles')
 		parser.add_argument('-od', '--only_download', action='store_true', help='Only Download dockerfiles')
 		parser.add_argument('-p', '--prepare_ssl', action='store_true', help='Prepare proxy ssl service')
+		parser.add_argument('-d', '--dns', action='store_true', help='Prepare dns records')
 		self.args = parser.parse_args()
 
 	def vprint(self, message):
@@ -185,11 +186,13 @@ class Build:
 			ssl_file.truncate()
 
 		self.vprint('Comparing volumes/certificates/v3.ext and backup')
-		identical = filecmp.cmp(os.path.abspath('volumes/certificates/v3.ext'),
-					os.path.abspath('volumes/certificates/v3.ext.bak'))
-
-		self.vprint('Deleting volumes/certificates/v3.ext.bak')
-		os.remove('volumes/certificates/v3.ext.bak')
+		if os.path.isfile('volumes/certificates/v3.ext.bak'):
+			identical = filecmp.cmp(os.path.abspath('volumes/certificates/v3.ext'),
+						os.path.abspath('volumes/certificates/v3.ext.bak'))
+			self.vprint('Deleting volumes/certificates/v3.ext.bak')
+			os.remove('volumes/certificates/v3.ext.bak')
+		else:
+			identical = False
 
 		if identical:
 			self.vprint('volumes/certificates/v3.ext and backup are identical.')
@@ -216,6 +219,23 @@ class Build:
 
 		self.vprint('Attempting to trust ecslocal certificate. Requires administrator privilege.')
 		subprocess.call(['sudo', './src/ssl/cert.sh', 'true'])
+
+	def prepare_dns_records(self):
+		"""
+		Prepare DNS records for custom urls.
+
+		:return: None
+		"""
+		print 'Preparing DNS records'
+
+		if os.path.isfile('/etc/hosts'):
+			self.vprint('Creating backup: /etc/hosts.bak')
+			shutil.copy(os.path.abspath('/etc/hosts'), os.path.abspath('/etc/hosts.bak'))
+
+		with open('/etc/hosts', 'r+') as hosts_file:
+			lines = hosts_file.readlines()
+			# Todo: Append entry if not exists
+
 
 	def svn_export(self, path):
 		"""
@@ -361,7 +381,7 @@ class Build:
 
 			self.vprint('Adding line with `install vim xdebug && mv html to html-copy`')
 			lines.insert(len(lines), 'RUN apt-get update && apt-get install -y --no-install-recommends '
-									 'php7.3-xdebug vim nano -y && phpenmod xdebug && mkdir -p /var/www/html-copy && '
+									 'php7.3-xdebug vim nano -y && mkdir -p /var/www/html-copy && '
 									 'mv /var/www/html/* /var/www/html-copy && \\\n')
 			lines.insert(len(lines), '    echo "zend_extension=$(find /usr/lib/php/2018* -name xdebug.so)"'
 									 ' > /etc/php/7.3/mods-available/xdebug.ini && \\\n')
@@ -504,6 +524,9 @@ class Build:
 
 		if self.args.prepare_ssl:
 			self.prepare_ssl_proxy()
+
+		if self.args.dns:
+			self.prepare_dns_records()
 
 		if self.build:
 			self.build_images()

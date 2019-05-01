@@ -6,3 +6,5 @@ syncs:
     site-sync:
         sync_excludes: ['.idea']
         src: ./wp
+        sync_userid: '33'
+        watch_excludes: ['.*/.git', '.gitignore', '.*/node_modules']

@@ -46,6 +46,21 @@ services:
             DOMAIN: localhost
             TARGET_HOST: site
 
+    cache:
+        container_name: wp-cache
+        hostname: redis
+        image: redis:alpine
+
+    cache-ui:
+        container_name: wp-cache-ui
+        hostname: redis-commander
+        image: rediscommander/redis-commander:latest
+        restart: always
+        environment:
+            - REDIS_HOSTS=local:cache:6379
+        ports:
+            - 8095:8081
+
 volumes:
     db_data:
     site-sync:

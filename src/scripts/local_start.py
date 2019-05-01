@@ -21,7 +21,7 @@ class LocalStart:
 		with open(file_path, 'r') as raw_file:
 			specs = json.load(raw_file)
 			specs['environment'] = 'local'
-			specs['resources']['compute:ecs']['task']['container_definition'] = {
+			specs['resources']['compute:ecs']['services']['site']['task']['container_definition'] = {
 				'image': 'nu-wp-site:latest'
 			}
 		with open('/build/artifacts/specfile_updated.json', 'w') as out_file:
@@ -62,12 +62,12 @@ class LocalStart:
 		with open('/var/www/html/wp-config.php') as wp_conf_file:
 			lines = wp_conf_file.readlines()
 			try:
-				db_name = lines.index("define('DB_NAME', getenv('WORDPRESS_DB_NAME'));\r\n")
+				db_name = lines.index("define( 'DB_NAME', getenv('WORDPRESS_DB_NAME') );\r\n")
 			except ValueError:
 				return
 			lines[db_name] = "if ( isset( $_SERVER['DB_NAME'] ) ) {\r\n" \
-							 "\tdefine('DB_NAME', $_SERVER['DB_NAME']);\r\n} else {\r\n" \
-							 "\tdefine('DB_NAME', getenv('WORDPRESS_DB_NAME'));\r\n}\r\n"
+							 "\tdefine( 'DB_NAME', $_SERVER['DB_NAME'] );\r\n} else {\r\n" \
+							 "\tdefine( 'DB_NAME', getenv('WORDPRESS_DB_NAME') );\r\n}\r\n"
 		with open('/var/www/html/wp-config.php', 'w') as new_file:
 			new_file.writelines(lines)
 
