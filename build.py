@@ -197,7 +197,6 @@ class Build:
 			lines = hosts_file.readlines()
 			# Todo: Append entry if not exists
 
-
 	def svn_export(self, path):
 		"""
 		Download files from nu-ecsplatform using svn export.
@@ -322,15 +321,7 @@ class Build:
 			lines = start_file.readlines()
 
 			for index, line in enumerate(lines):
-				if 'RUN git clone' in line:
-					self.vprint('Removing line with `RUN git clone`')
-					removable_lines.append(index)
-
-				elif 'mv @SITE_REPO@' in line:
-					self.vprint('Removing line with `mv @SITE_REPO@`')
-					removable_lines.append(index)
-
-				elif 'rm -rf @SITE_REPO@' in line:
+				if 'rm -rf @SITE_REPO@' in line:
 					self.vprint('Removing line with `rm -rf @SITE_REPO@`')
 					removable_lines.append(index)
 
@@ -339,6 +330,10 @@ class Build:
 			self.vprint('Replacing line `build_site @{TOKENS}@` with `build_site {VALUES}`')
 			build_index = lines.index('    build_site @SITE_REPO@ @THEME@ @SITE_PATH@ @URL@ @ADMIN_PASS@ && \\\n')
 			lines[build_index] = '    build_site local-wp basic-theme / localhost wp-admin && \\\n'
+
+			self.vprint('Replacing line `RUN mv @SITE_REPO@/src/themes/* /var/www/html/wp-content/themes/ &&`')
+			run_index = lines.index('RUN mv @SITE_REPO@/src/themes/* /var/www/html/wp-content/themes/ && \\\n')
+			lines[run_index] = 'RUN echo "" > /dev/null && \\\n'
 
 			self.vprint('Adding line with `install vim xdebug && mv html to html-copy`')
 			lines.insert(len(lines), 'RUN apt-get update && apt-get install -y --no-install-recommends '
@@ -388,7 +383,7 @@ class Build:
 			self.vprint('Adding line with `from local_start import LocalStart`')
 			lines.insert(start_index + 1, '\nfrom local_start import LocalStart\n')
 
-			run_index = lines.index('def run():\n')
+			run_index = lines.index('def run(repo, url, admin_pass):\n')
 
 			self.vprint('Adding line with `LocalStart().run()`')
 			lines.insert(run_index + 1, '\n    LocalStart().run()\n')
